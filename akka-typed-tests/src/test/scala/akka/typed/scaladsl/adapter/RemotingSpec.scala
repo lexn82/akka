@@ -7,10 +7,8 @@ import akka.testkit.AkkaSpec
 import akka.typed.{ ActorRef, ActorSystem }
 import akka.typed.scaladsl.Actor
 import akka.actor.{ ExtendedActorSystem, ActorSystem ⇒ UntypedActorSystem }
-import akka.cluster.{ Cluster, ClusterActorRefProvider }
-import akka.remote.RARP
+import akka.cluster.Cluster
 import akka.serialization.{ BaseSerializer, SerializerWithStringManifest }
-import akka.typed.cluster.TypedClusterActorRefProvider
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Promise
@@ -36,7 +34,7 @@ object RemotingSpec {
     akka {
       loglevel = debug
       actor {
-        provider = akka.typed.cluster.TypedClusterActorRefProvider
+        provider = cluster
         warn-about-java-serializer-usage = off
         serialize-creators = off
         serializers {
@@ -81,12 +79,10 @@ class RemotingSpec extends AkkaSpec(RemotingSpec.config) {
 
       val system2 = UntypedActorSystem(system.name + "-system2", ConfigFactory.parseString("akka.remote.artery.canonical.port=2552").withFallback(RemotingSpec.config))
       try {
-        val provider2 = system2.asInstanceOf[ExtendedActorSystem]
-          .provider.asInstanceOf[TypedClusterActorRefProvider]
 
         // resolve the actor from node2
         val remoteRef: ActorRef[Ping] =
-          provider2.resolveTypedActorRef[Ping](s"akka://${system.name}@127.0.0.1:2551/user/pingpong")
+          ActorRefResolver(system).resolveActorRef[Ping](s"akka://${system.name}@127.0.0.1:2551/user/pingpong")
 
         val pongPromise = Promise[Done]()
         val recipient = system2.spawn(Actor.immutable[String] { (_, msg) ⇒
