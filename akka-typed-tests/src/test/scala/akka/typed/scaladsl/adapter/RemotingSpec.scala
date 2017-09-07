@@ -14,25 +14,25 @@ import akka.typed.cluster.TypedClusterActorRefProvider
 import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Promise
+import akka.typed.cluster.ActorRefResolver
 
 class PingSerializer(system: ExtendedActorSystem) extends SerializerWithStringManifest {
   override def identifier = 41
   override def manifest(o: AnyRef) = "a"
   override def toBinary(o: AnyRef) = o match {
     case RemotingSpec.Ping(who) ⇒
-      who.path.toSerializationFormatWithAddress(Cluster(system).selfAddress).getBytes(StandardCharsets.UTF_8)
+      ActorRefResolver(system).toSerializationFormat(who).getBytes(StandardCharsets.UTF_8)
   }
   override def fromBinary(bytes: Array[Byte], manifest: String) = {
     val str = new String(bytes, StandardCharsets.UTF_8)
-    val ref = system.provider.asInstanceOf[TypedClusterActorRefProvider].resolveTypedActorRef[String](str)
-    println(s"fromBinary: ${ref}")
+    val ref = ActorRefResolver(system).resolveActorRef[String](str)
     RemotingSpec.Ping(ref)
   }
 }
 
 object RemotingSpec {
   def config = ConfigFactory.parseString(
-    """
+    s"""
     akka {
       loglevel = debug
       actor {
@@ -43,7 +43,7 @@ object RemotingSpec {
           test = "akka.typed.scaladsl.adapter.PingSerializer"
         }
         serialization-bindings {
-          "akka.typed.scaladsl.adapter.RemotingSpec$Ping" = test
+          "akka.typed.scaladsl.adapter.RemotingSpec$$Ping" = test
         }
       }
       remote.artery {
@@ -74,8 +74,7 @@ class RemotingSpec extends AkkaSpec(RemotingSpec.config) {
             pingPromise.success(Done)
             sender ! "pong"
             Actor.stopped
-        }
-      )
+        })
 
       // typed actor on system1
       val pingPongActor = system.spawn(ponger, "pingpong")
